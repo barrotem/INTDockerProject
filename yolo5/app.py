@@ -7,6 +7,7 @@ import yaml
 from loguru import logger
 import os
 import boto3
+import pymongo
 
 images_bucket = os.environ['BUCKET_NAME']
 
@@ -54,6 +55,7 @@ def predict():
     predicted_img_path = Path(f'static/data/{prediction_id}/{original_img_path.name}')
     # Uploads the predicted image (predicted_img_path) to S3 - without accidentally overriding the original image.
     s3_resource.upload_file(Filename=str(predicted_img_path), Bucket=images_bucket, Key=str(original_img_path))
+    logger.info(f'Uploaded {str(predicted_img_path)} to {images_bucket}/{str(original_img_path)}')
 
     # Parse prediction labels and create a summary
     pred_summary_path = Path(f'static/data/{prediction_id}/labels/{str(predicted_img_path.name).split(".")[0]}.txt')
@@ -72,18 +74,36 @@ def predict():
                 'height': float(l[4]),
             } for l in labels]
 
-        logger.info(f'prediction: {prediction_id}/{original_img_path}. prediction summary:\n\n{labels}')
+        logger.info(f'prediction: {prediction_id}/{original_img_path}. prediction summary:\n\n{labels}\n')
 
         prediction_summary = {
             'prediction_id': prediction_id,
-            'original_img_path': str(original_img_path),
-            'predicted_img_path': str(predicted_img_path),
+            'original_img_path': str(original_img_path), #PosixPath(s) have to be turned to strings to be serialized into JSON
+            'predicted_img_path': str(predicted_img_path), #PosixPath(s) have to be turned to strings to be serialized into JSON
             'labels': labels,
             'time': time.time()
         }
 
-        # TODO store the prediction_summary in MongoDB
-        # Return prediction_summary as a response to the request
+        # Store the prediction summary in MongoDB
+        try:
+            # Connect to the MongoDB instance
+            uri = "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/test"
+            mongodb_client = pymongo.MongoClient(uri)
+            # Create a new "predictions" collection if it doesn't already exist and interact with it
+            mongodb_database = mongodb_client["test"]
+            mongodb_collection = mongodb_database["predictions"]
+            # Store prediction summary within MongoDB
+            result = mongodb_collection.insert_one(prediction_summary)
+            logger.info(f'Succesffuly stored prediction summary within MongoDB :{result.acknowledged}')
+
+        except Exception as e:
+            logger.info(e)
+
+        # Return prediction_summary as a response to the request.
+        # Problem : prediction_summary might now have the _id key with an ObjectID type assigned as a value.
+        # This value isn't JSON serializable, and will be manually cast to a str.
+        if "_id" in prediction_summary:
+            prediction_summary["_id"] = str(prediction_summary["_id"])
         return prediction_summary
     else:
         return f'prediction: {prediction_id}/{original_img_path}. prediction result not found', 404

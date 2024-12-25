@@ -3,3 +3,5 @@ pyyaml
 loguru
 #Add boto3 - AWS SDK for python
 boto3
+#Add pymongo - MongoDB SDK for python
+pymongo
