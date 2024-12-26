@@ -3,3 +3,6 @@ loguru>=0.7.0
 requests>=2.31.0
 flask>=2.3.2
 matplotlib
+# Define development specific requirements
+boto3 # Install boto3 for AWS interaction
+requests # Install requests for inter-container communication

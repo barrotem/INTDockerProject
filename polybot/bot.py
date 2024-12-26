@@ -3,6 +3,8 @@ from loguru import logger
 import os
 import time
 from telebot.types import InputFile
+import boto3  # For AWS interaction
+import requests  # For inter-container communication
 
 
 class Bot:
@@ -35,12 +37,16 @@ class Bot:
         Downloads the photos that sent to the Bot to `photos` directory (should be existed)
         :return:
         """
-        if not self.is_current_msg_photo(msg):
-            raise RuntimeError(f'Message content of type \'photo\' expected')
+        # if not self.is_current_msg_photo(msg):
+        #     raise RuntimeError(f'Message content of type \'photo\' expected')
 
+        logger.info(f'Received a new photo !')
         file_info = self.telegram_bot_client.get_file(msg['photo'][-1]['file_id'])
+        photo_caption = msg['caption'] if 'caption' in msg else None
         data = self.telegram_bot_client.download_file(file_info.file_path)
         folder_name = file_info.file_path.split('/')[0]
+        # Add informative logs regarding files' metadata
+        logger.info(f'Downloaded received photo to the following path : {file_info.file_path}')
 
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
@@ -48,7 +54,7 @@ class Bot:
         with open(file_info.file_path, 'wb') as photo:
             photo.write(data)
 
-        return file_info.file_path
+        return file_info.file_path, photo_caption
 
     def send_photo(self, chat_id, img_path):
         if not os.path.exists(img_path):
@@ -66,12 +72,41 @@ class Bot:
 
 
 class ObjectDetectionBot(Bot):
+    def __init__(self, token, telegram_chat_url, images_bucket):
+        super().__init__(token, telegram_chat_url)
+        # Add specific implementation code :
+        # Initialize s3 realted variables
+        self.s3_client = boto3.client('s3')
+        self.images_bucket = images_bucket
+
     def handle_message(self, msg):
         logger.info(f'Incoming message: {msg}')
 
         if self.is_current_msg_photo(msg):
-            photo_path = self.download_user_photo(msg)
+            photo_path, photo_caption = self.download_user_photo(msg)
+            # Upload the photo to S3
+            s3_photo_key = f'images/{photo_caption}' if photo_caption is not None else f'images/{photo_path.split("/")[1]}'
+            self.s3_client.upload_file(Filename=photo_path, Bucket=self.images_bucket, Key=s3_photo_key)
+            logger.info(f'Successfully uploaded {photo_path} to "{self.images_bucket}" with the caption "{s3_photo_key}"')
 
-            # TODO upload the photo to S3
-            # TODO send an HTTP request to the `yolo5` service for prediction
-            # TODO send the returned results to the Telegram end-user
+            # Send an HTTP request to the `yolo5` service for prediction
+            logger.info(f'Attempting to curl to : http://yolo5:8081/predict?imgName={s3_photo_key}')
+            response = requests.post(f'http://yolo5:8081/predict?imgName={s3_photo_key}')
+            response_dict = response.json()
+            logger.info(f'response.json(): {response_dict}')
+
+            # Send the returned results to the Telegram end-user
+            # Count number of prediction objects withing the image
+            prediction_label_counts = {}
+            for prediction in response_dict['labels']:
+                # prediction is a json array (dict) representing all metadata of a specific prediction
+                label = prediction['class']
+                if label in prediction_label_counts:
+                    prediction_label_counts[label] += 1
+                else:
+                    prediction_label_counts[label] = 1
+            # Prepare a formatted string to send to the user
+            detected_objects = f'Detected the following objects within the image :\n'
+            for label in prediction_label_counts:
+                detected_objects += f'{label} : {prediction_label_counts[label]}\n'
+            self.send_text(msg['chat']['id'],detected_objects)
