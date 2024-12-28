@@ -58,7 +58,7 @@ def predict():
     logger.info(f'Uploaded {str(predicted_img_path)} to {images_bucket}/{str(original_img_path)}')
 
     # Parse prediction labels and create a summary
-    pred_summary_path = Path(f'static/data/{prediction_id}/labels/{str(predicted_img_path.name).split(".")[0]}.txt')
+    pred_summary_path = Path(f'static/data/{prediction_id}/labels/{str(Path(original_img_path.name).with_suffix(".txt"))}')  # Replace file extension for .txt
     logger.info(f'looking for prediction summary in path: {pred_summary_path}...')
     # The file located in pred_summary_path represents the model's prediction results.
     # Parse prediction results into a JSON like object and return the result.
@@ -106,6 +106,7 @@ def predict():
             prediction_summary["_id"] = str(prediction_summary["_id"])
         return prediction_summary
     else:
+        logger.info(f'prediction: {prediction_id}/{original_img_path}. prediction result not found')
         return f'prediction: {prediction_id}/{original_img_path}. prediction result not found', 404
 
 
