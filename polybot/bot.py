@@ -52,7 +52,7 @@ class Bot:
             os.makedirs(folder_name)
 
         with open(file_info.file_path, 'wb') as photo:
-            photo.write(data)
+            photo.write(data)  # Actually write the photo data to the file_path
 
         return file_info.file_path, photo_caption
 
@@ -85,28 +85,52 @@ class ObjectDetectionBot(Bot):
         if self.is_current_msg_photo(msg):
             photo_path, photo_caption = self.download_user_photo(msg)
             # Upload the photo to S3
+            supported_image_formats = ['bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp']
             s3_photo_key = f'images/{photo_caption}' if photo_caption is not None else f'images/{photo_path.split("/")[1]}'
+            logger.info(f'S3 photo_key : {s3_photo_key}')
+            # Check the photo's file extension. Blit .jpg if none - existent
+            s3_photo_key_file_extension = s3_photo_key.split(".")[-1]
+            s3_photo_key = s3_photo_key if s3_photo_key_file_extension in supported_image_formats else s3_photo_key + '.jpg'
+            logger.info(f'S3 photo_key_new : {s3_photo_key}')
             self.s3_client.upload_file(Filename=photo_path, Bucket=self.images_bucket, Key=s3_photo_key)
             logger.info(f'Successfully uploaded {photo_path} to "{self.images_bucket}" with the caption "{s3_photo_key}"')
 
             # Send an HTTP request to the `yolo5` service for prediction
             logger.info(f'Attempting to curl to : http://yolo5:8081/predict?imgName={s3_photo_key}')
             response = requests.post(f'http://yolo5:8081/predict?imgName={s3_photo_key}')
-            response_dict = response.json()
-            logger.info(f'response.json(): {response_dict}')
+            try:
+                response_dict = response.json()  # This line is blocking, which is good, sanity - wise
+                logger.info(f'Image prediction successful, results are as follows - response.json(): {response_dict}')
 
-            # Send the returned results to the Telegram end-user
-            # Count number of prediction objects withing the image
-            prediction_label_counts = {}
-            for prediction in response_dict['labels']:
-                # prediction is a json array (dict) representing all metadata of a specific prediction
-                label = prediction['class']
-                if label in prediction_label_counts:
-                    prediction_label_counts[label] += 1
-                else:
-                    prediction_label_counts[label] = 1
-            # Prepare a formatted string to send to the user
-            detected_objects = f'Detected the following objects within the image :\n'
-            for label in prediction_label_counts:
-                detected_objects += f'{label} : {prediction_label_counts[label]}\n'
-            self.send_text(msg['chat']['id'],detected_objects)
+                # Download the predicted image from s3 and send it to the user
+                # NOTE : This code is redundant due to yolo5 behavior - it already saves the image contents within its own file system
+                # NOTE : This code allows predictions directory "mirroring" between yolo5 and polybot
+                s3_predicted_photo_key = f'predictions/{s3_photo_key.split("/")[1]}'  # predicted photo key within aws will be 'predictions/<file_name>'
+                if not os.path.exists(s3_predicted_photo_key.split("/")[0]):
+                    # If predictions folder doesn't exist within this container, create it.
+                    os.makedirs(s3_predicted_photo_key.split("/")[0])
+                self.s3_client.download_file(Bucket=self.images_bucket, Key=s3_predicted_photo_key,Filename=s3_predicted_photo_key)
+                logger.info(f'Downloaded the predicted photo : {s3_predicted_photo_key}. Sending the image to the user.')
+                self.send_photo(msg['chat']['id'], s3_predicted_photo_key)
+
+                # Send the returned results to the Telegram end-user
+                # Count number of prediction objects withing the image
+                prediction_label_counts = {}
+                for prediction in response_dict['labels']:
+                    # prediction is a json array (dict) representing all metadata of a specific prediction
+                    label = prediction['class']
+                    if label in prediction_label_counts:
+                        prediction_label_counts[label] += 1
+                    else:
+                        prediction_label_counts[label] = 1
+                # Prepare a formatted string to send to the user
+                detected_objects = f'Detected the following objects within the image :\n'
+                for label in prediction_label_counts:
+                    detected_objects += f'{label} : {prediction_label_counts[label]}\n'
+                logger.info(f'Sending prediction labels to the user')
+                self.send_text(msg['chat']['id'], detected_objects)
+
+            except requests.exceptions.JSONDecodeError as e:
+                # Exeption raised when response contains no content? Meaning if prediction was unsuccessful.
+                logger.info(f'What?! No predictions could be made for {s3_photo_key}.\nYolo5 response contents are : {response.text}')
+                self.send_text(msg['chat']['id'], f'Oops... No predictions could be made for the image. Try again !')
