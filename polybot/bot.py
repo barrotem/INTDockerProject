@@ -30,18 +30,20 @@ class Bot:
         self.telegram_bot_client.send_message(chat_id, text, reply_to_message_id=quoted_msg_id)
 
     def is_current_msg_photo(self, msg):
-        return 'photo' in msg
+        return 'photo' in msg or 'document' in msg
 
     def download_user_photo(self, msg):
         """
         Downloads the photos that sent to the Bot to `photos` directory (should be existed)
         :return:
         """
-        # if not self.is_current_msg_photo(msg):
-        #     raise RuntimeError(f'Message content of type \'photo\' expected')
 
         logger.info(f'Received a new photo !')
-        file_info = self.telegram_bot_client.get_file(msg['photo'][-1]['file_id'])
+        # Get photo files depending on uploading source - phone / desktop
+        if 'photo' in msg:
+            file_info = self.telegram_bot_client.get_file(msg['photo'][-1]['file_id'])
+        elif 'document' in msg:
+            file_info = self.telegram_bot_client.get_file(msg['document']['thumbnail']['file_id'])
         photo_caption = msg['caption'] if 'caption' in msg else None
         data = self.telegram_bot_client.download_file(file_info.file_path)
         folder_name = file_info.file_path.split('/')[0]
@@ -78,6 +80,15 @@ class ObjectDetectionBot(Bot):
         # Initialize s3 realted variables
         self.s3_client = boto3.client('s3')
         self.images_bucket = images_bucket
+        self.greeting_message = """
+Barrotem's polybot service
+--------------------------
+Hello there, thank you for using me !
+I am a Telegram bot able to perform object detection and classification on images that you send me.
+
+To interact with me, simply attach an image.
+I will return the classified image with the detected objects, and textual representation.
+        """
 
     def handle_message(self, msg):
         logger.info(f'Incoming message: {msg}')
@@ -134,3 +145,6 @@ class ObjectDetectionBot(Bot):
                 # Exeption raised when response contains no content? Meaning if prediction was unsuccessful.
                 logger.info(f'What?! No predictions could be made for {s3_photo_key}.\nYolo5 response contents are : {response.text}')
                 self.send_text(msg['chat']['id'], f'Oops... No predictions could be made for the image. Try again !')
+        else:
+            logger.info(f'Incoming message: {msg} does not contain an image !')
+            self.send_text(msg['chat']['id'], self.greeting_message)
