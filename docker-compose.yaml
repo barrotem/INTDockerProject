@@ -1,0 +1,59 @@
+# Docker-compose file for deploying the polybot service
+# This compose initializes 3 services :
+# 1. MongoDB (3 containers)
+# 2. Yolo5
+# 3. Polybot
+
+services:
+  # mongodb-1
+  mongo1:
+    image: mongo:5
+    volumes:
+      - mongodb_data1:/data/db
+    networks:
+      - dockerproject_backend
+    expose:
+      - 27017
+    command: ["mongod", "--replSet", "mongo_rs", "--bind_ip", "localhost,mongo1"]
+  # mongodb-2
+  mongo2:
+    image: mongo:5
+    volumes:
+      - mongodb_data2:/data/db
+    networks:
+      - dockerproject_backend
+    expose:
+      - 27017
+    command: ["mongod", "--replSet", "mongo_rs", "--bind_ip", "localhost,mongo2"]
+  # mongodb-3
+  mongo3:
+    image: mongo:5
+    volumes:
+      - mongodb_data3:/data/db
+    networks:
+      - dockerproject_backend
+    expose:
+      - 27017
+    command: ["mongod", "--replSet", "mongo_rs", "--bind_ip", "localhost,mongo3"]
+  # mongo-init
+  # This container's purpose is to initialize the replica set containing all 3 mongo nodes
+  mongo-init:
+    image: mongo:5
+    volumes:
+      - ./mongo/mongo_init.sh:/docker-entrypoint-initdb.d/mongo_init.sh
+    networks:
+      - dockerproject_backend
+    entrypoint:
+      ["bash", "/docker-entrypoint-initdb.d/mongo_init.sh"]
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+volumes:
+  mongodb_data1:
+  mongodb_data2:
+  mongodb_data3:
+
+networks:
+  dockerproject_backend:
+  dockerproject_frontend:
