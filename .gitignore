@@ -127,6 +127,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.telegram_token_secret.txt
+.telegram_app_url_secret.txt
 
 # Spyder project settings
 .spyderproject
