@@ -1,0 +1,92 @@
+# Docker-compose file for deploying the polybot service within an ec2 instance
+# This compose initializes 3 services :
+# 1. MongoDB (3 containers)
+# 2. Yolo5
+# 3. Polybot
+
+services:
+  # mongodb-1
+  mongo1:
+    image: ${MONGO_IMAGE_NAME}
+    volumes:
+      - mongodb_data1:/data/db
+    networks:
+      - dockerproject_backend
+    expose:
+      - 27017
+    command: ["mongod", "--replSet", "mongo_rs", "--bind_ip", "localhost,mongo1"]
+  # mongodb-2
+  mongo2:
+    image: ${MONGO_IMAGE_NAME}
+    volumes:
+      - mongodb_data2:/data/db
+    networks:
+      - dockerproject_backend
+    expose:
+      - 27017
+    command: ["mongod", "--replSet", "mongo_rs", "--bind_ip", "localhost,mongo2"]
+  # mongodb-3
+  mongo3:
+    image: ${MONGO_IMAGE_NAME}
+    volumes:
+      - mongodb_data3:/data/db
+    networks:
+      - dockerproject_backend
+    expose:
+      - 27017
+    command: ["mongod", "--replSet", "mongo_rs", "--bind_ip", "localhost,mongo3"]
+  # mongo-init
+  # This container's purpose is to initialize the replica set containing all 3 mongo nodes
+  mongo-init:
+    image: ${MONGO_IMAGE_NAME}
+    volumes:
+      - ./mongo/mongo_init.sh:/docker-entrypoint-initdb.d/mongo_init.sh
+    networks:
+      - dockerproject_backend
+    entrypoint:
+      ["bash", "/docker-entrypoint-initdb.d/mongo_init.sh"]
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+  #yolo5
+  # Needs access to s3 bucket
+  yolo5:
+    image: ${YOLO5_IMAGE_NAME}
+    networks:
+      - dockerproject_backend
+      - dockerproject_frontend
+    environment:
+      - BUCKET_NAME=${BUCKET_NAME}
+    expose:
+      - 8081
+  #polybot
+  # Needs access to s3 bucket
+  polybot:
+    image: ${POLYBOT_IMAGE_NAME}
+    networks:
+      - dockerproject_frontend
+    environment:
+      - BUCKET_NAME=${BUCKET_NAME}
+      - TELEGRAM_TOKEN_PATH=/run/secrets/telegram_token_secret
+      - TELEGRAM_APP_URL_PATH=/run/secrets/telegram_app_secret
+    secrets:
+      - telegram_token_secret
+      - telegram_app_secret
+    ports:
+      - 8443:8443
+# Define used volumes
+volumes:
+  mongodb_data1:
+  mongodb_data2:
+  mongodb_data3:
+# Define used networks
+networks:
+  dockerproject_backend:
+  dockerproject_frontend:
+# Define used secrets
+secrets:
+  telegram_token_secret:
+    file: ./.telegram_token_secret.txt
+  telegram_app_secret:
+    file: ./.telegram_app_url_secret.txt
