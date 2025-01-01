@@ -88,7 +88,7 @@ I am a Telegram bot able to perform object detection and classification on image
 
 To interact with me, simply attach an image.
 I will return the classified image with the detected objects, and textual representation.
-v1.0.1
+v1.0.2
         """
 
     def handle_message(self, msg):

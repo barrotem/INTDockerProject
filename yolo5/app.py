@@ -111,4 +111,5 @@ def predict():
 
 
 if __name__ == "__main__":
+    #Dummy code commit for CI/CD trigger
     app.run(host='0.0.0.0', port=8081)
