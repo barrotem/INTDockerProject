@@ -78,7 +78,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           source: mongo/
-          target: PolybotService/mongo
+          target: PolybotService/
 
       - name: Update the Docker Compose project in the EC2
         uses: appleboy/ssh-action@master
