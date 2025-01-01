@@ -95,11 +95,11 @@ jobs:
             
             # Generate .env file
             # Include mongo base image and bucket_name in .env for future changes
-            echo """
+            echo """\ 
             MONGO_IMAGE_NAME=mongo:5
-            POLYBOT_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
-            YOLO5_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
-            BUCKET_NAME=barrotem-polybot-docker-bucket
+            YOLO5_IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
+            POLYBOT_IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
+            BUCKET_NAME=barrotem-polybot-docker-bucket\
             """ > .env
             
             # Take the service down
