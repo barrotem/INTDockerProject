@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  EC2_PUBLIC_IP: X.X.X.X  # TODO replace to your EC2 instance public IP
+  EC2_PUBLIC_IP: 51.20.44.105  # Should be replaced to the EC2 instance public IP
 
 jobs:
   PolybotBuild:
@@ -27,7 +27,7 @@ jobs:
           # Login to DockerHub (comment out if you don't use DockerHub):         
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
 
-          IMAGE_NAME=polybot:${{ github.run_number }}
+          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
@@ -47,7 +47,7 @@ jobs:
                
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
 
-          IMAGE_NAME=yolo5:${{ github.run_number }}
+          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
@@ -79,22 +79,27 @@ jobs:
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
             # You deployment script here...
+            # Change deployment script so it matches my configuration - secrets will be stored in hidden files with names matching the base configuration.
             
             sudo apt update && sudo apt install jq -y
             
             cd PolybotService/
             
             # Save telegram bot token in a secret file, to be used in docker-compose.yaml
-            echo -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" > telegram_bot_token.secret
+            echo -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" > .telegram_token_secret.txt
             
             # Get the ngrok current domain (you should assume ngrok is already running in the EC2)
             NGROK_DOMAIN=$(curl -s localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+            # Save ngrok domain in a secret file, to be used in docker-compose.yaml
+            echo -n $NGROK_DOMAIN > .telegram_app_url_secret.txt
             
             # Generate .env file
+            # Include mongo base image and bucket_name in .env for future changes
             echo """
-            POLYBOT_IMG_NAME=polybot:${{ github.run_number }}
-            YOLO5_IMG_NAME=yolo5:${{ github.run_number }}
-            TELEGRAM_APP_URL=$NGROK_DOMAIN
+            MONGO_IMAGE_NAME=mongo:5
+            POLYBOT_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
+            YOLO5_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
+            BUCKET_NAME=barrotem-polybot-docker-bucket
             """ > .env
             
             # Take the service down
