@@ -115,4 +115,4 @@ jobs:
             docker compose -p ubuntu down
             
             # Take it up with the current updated values
-            docker compose -p ubuntu up
+            docker compose -p ubuntu up -d
