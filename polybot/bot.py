@@ -83,7 +83,7 @@ class ObjectDetectionBot(Bot):
         self.greeting_message = """
 Barrotem's polybot service
 --------------------------
-Hello there, thank you for using me !
+Hello there, thank you for using me ! alon presentation
 I am a Telegram bot able to perform object detection and classification on images that you send me.
 
 To interact with me, simply attach an image.
