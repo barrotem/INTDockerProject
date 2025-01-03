@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  EC2_PUBLIC_IP: 16.16.201.40  # Should be replaced to the EC2 instance public IP
+  EC2_PUBLIC_IP: 16.16.201.40  # Should be replaced to my EC2 instance public IP
 
 jobs:
   PolybotBuild:
